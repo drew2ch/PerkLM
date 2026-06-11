@@ -11,7 +11,7 @@ class FriendsDataset(Dataset):
             maxt: maximum token length, default 128
     """
     def __init__(self, data, tokenizer, maxt = 128):
-        self.data = []
+        self.sequences = []
         self.tokenizer = tokenizer
         self.maxt = maxt
         self.pad_id = tokenizer.pad_token_id
@@ -44,15 +44,17 @@ class FriendsDataset(Dataset):
                     sequence = ("<CONTEXT>\n" + context_str + \
                                 "\n</CONTEXT>\n<RESPONSE>\n" + \
                                 format_turn(response) + "\n<EOT>")
-                    encoded = tokenizer(sequence, add_special_tokens = False,
-                                        max_length = self.maxt,
-                                        truncation = True,
-                                        padding = 'max_length',
-                                        return_tensors = 'pt')
-                    
-                    self.data.append({
-                        'input_ids': encoded['input_ids'].squeeze(0),
-                        'attention_mask': encoded['attention_mask'].squeeze(0)})
+                    self.sequences.append(sequence)
 
-    def __len__(self): return len(self.data)
-    def __getitem__(self, index): return self.data[index]
+    def __len__(self): return len(self.sequences)
+    def __getitem__(self, index): 
+        """ Tokenization on the fly
+        """
+        encoded = self.tokenizer(self.sequences[index], add_special_tokens = False,
+                                  max_length = self.maxt,
+                                  truncation = True,
+                                  padding = 'max_length',
+                                  return_tensors = 'pt')
+        
+        return {'input_ids': encoded['input_ids'].squeeze(0),
+                'attention_mask': encoded['attention_mask'].squeeze(0)}
