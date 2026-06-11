@@ -1,0 +1,25 @@
+system:
+    seed: 893
+    exp_dir: './experiments'
+    epochs: 100
+    batch_size: 32
+    accum_steps: 4
+    n_workers: 4
+    patience: 25
+    resume: './experiments/checkpoints'
+
+optim:
+    lr: 0.0003
+    wd: 0.05
+    min_lr: 0.00003
+    warmup: 434
+    total_steps: 10850
+    
+model:
+    d_model: 256
+    n_heads: 8
+    n_layers: 4
+    d_ff: 1024
+    dropout: 0.2
+    maxt: 128
+    tokenizer: './tokenizer'
