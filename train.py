@@ -21,6 +21,16 @@ from transformers import GPT2TokenizerFast
 from model import FriendsTransformer
 from dataset import FriendsDataset
 
+def handle_exception(exc_type, exc_value, exc_traceback):
+    """ Global exception handler for unhandled exceptions
+        Route crashes to the logger
+    """
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    logging.getLogger().error("Unhandled exception", exc_info = (exc_type, exc_value, exc_traceback))
+
 def setup_logging(log_path: Path):
     """ Log to both console and a file.
     """
@@ -37,6 +47,8 @@ def setup_logging(log_path: Path):
     fh = logging.FileHandler(log_path, mode = 'a', encoding = 'utf-8')
     fh.setFormatter(fmt)
     logger.addHandler(fh)
+
+    sys.excepthook = handle_exception
 
 def seed_worker(worker_id):
     """ Set random seed for a worker
