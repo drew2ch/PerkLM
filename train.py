@@ -77,8 +77,9 @@ def train_epoch(model, dataloader,
     total_grad_norm = 0.0
     optimizer.zero_grad()
 
-    for batch_idx, batch_data in tqdm(enumerate(dataloader), total = len(dataloader),
-                                      desc = "Training", leave = False, disable = True):
+    for batch_idx, batch_data in enumerate(tqdm(dataloader, total = len(dataloader),
+                                      desc = "Training", leave = False, 
+                                      mininterval = 100.0, disable = False)):
 
         tokens = batch_data['input_ids'].to(device)
         attention_mask = batch_data['attention_mask'].to(device)
@@ -137,7 +138,8 @@ def eval_epoch(model, dataloader, device, tokenizer):
 
     with torch.no_grad():
 
-        for batch_data in tqdm(dataloader, desc = "Evaluating", leave = False, disable = True):
+        for batch_data in tqdm(dataloader, desc = "Evaluating", leave = False, 
+                               mininterval = 100.0, disable = False):
 
             tokens = batch_data['input_ids'].to(device)
             attention_mask = batch_data['attention_mask'].to(device)
@@ -155,7 +157,7 @@ def eval_epoch(model, dataloader, device, tokenizer):
                 labels_trimmed = labels[:, :T_actual]
                 num_tokens = (labels_trimmed != tokenizer.pad_token_id).sum()
 
-                loss = F.cross_entropy(logits.reshape(-1, tokenizer.vocab_size), 
+                loss = F.cross_entropy(logits.reshape(-1, len(tokenizer)), 
                                     labels_trimmed.reshape(-1),
                                     ignore_index = tokenizer.pad_token_id,
                                     reduction = 'sum')
