@@ -78,7 +78,7 @@ def train_epoch(model, dataloader,
     optimizer.zero_grad()
 
     for batch_idx, batch_data in tqdm(enumerate(dataloader), total = len(dataloader),
-                                      desc = "Training", leave = False):
+                                      desc = "Training", leave = False, disable = True):
 
         tokens = batch_data['input_ids'].to(device)
         attention_mask = batch_data['attention_mask'].to(device)
@@ -137,7 +137,7 @@ def eval_epoch(model, dataloader, device, tokenizer):
 
     with torch.no_grad():
 
-        for batch_data in tqdm(dataloader, desc = "Evaluating", leave = False):
+        for batch_data in tqdm(dataloader, desc = "Evaluating", leave = False, disable = True):
 
             tokens = batch_data['input_ids'].to(device)
             attention_mask = batch_data['attention_mask'].to(device)
