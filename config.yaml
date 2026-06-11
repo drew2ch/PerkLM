@@ -10,9 +10,9 @@ system:
 
 optim:
     lr: 0.0003
-    wd: 0.05
+    wd: 0.03
     min_lr: 0.00003
-    warmup: 434
+    warmup: 400
     total_steps: 10850
     
 model:
@@ -20,6 +20,6 @@ model:
     n_heads: 8
     n_layers: 4
     d_ff: 1024
-    dropout: 0.2
-    maxt: 128
+    dropout: 0.1
+    maxt: 256
     tokenizer: './tokenizer'
