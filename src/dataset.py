@@ -1,6 +1,4 @@
-import os
 import json
-import torch
 from torch.utils.data import Dataset
 
 class FriendsDataset(Dataset):
