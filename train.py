@@ -1,3 +1,6 @@
+import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 import sys
 import json
 import time
@@ -81,7 +84,7 @@ def train_epoch(model, dataloader,
             labels_trimmed = labels[:, :T_actual]
             num_tokens = (labels_trimmed != tokenizer.pad_token_id).sum()
 
-            loss = F.cross_entropy(logits.reshape(-1, tokenizer.vocab_size), 
+            loss = F.cross_entropy(logits.reshape(-1, len(tokenizer)), 
                                    labels_trimmed.reshape(-1),
                                    ignore_index = tokenizer.pad_token_id,
                                    reduction = 'sum')

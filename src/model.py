@@ -62,7 +62,7 @@ class DialogueEmbedding(nn.Module):
         self.d_model = d_model
         self.maxt = maxt
 
-        self.embedding = nn.Embedding(num_embeddings = self.tokenizer.vocab_size,
+        self.embedding = nn.Embedding(num_embeddings = len(self.tokenizer),
                                       embedding_dim = self.d_model)
 
     def forward(self, batch):
@@ -194,7 +194,7 @@ class FriendsTransformer(nn.Module):
         self.decoder = nn.ModuleList([DialogueDecoderLayer(self.d_model, self.n_heads, self.d_ff, self.dropout, self.maxt)\
                                       for _ in range(self.n_layers)])
         self.final_norm = nn.LayerNorm(self.d_model)
-        self.lm_head = nn.Linear(self.d_model, self.tokenizer.vocab_size, bias = False)
+        self.lm_head = nn.Linear(self.d_model, len(self.tokenizer), bias = False)
         self.lm_head.weight = self.embedder.embedding.weight
 
     def forward(self, batch):
