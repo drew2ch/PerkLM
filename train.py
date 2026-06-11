@@ -44,7 +44,7 @@ def setup_logging(log_path: Path):
     ch.setFormatter(fmt)
     logger.addHandler(ch)
 
-    fh = logging.FileHandler(log_path, mode = 'a', encoding = 'utf-8')
+    fh = logging.FileHandler(log_path, mode = 'w', encoding = 'utf-8')
     fh.setFormatter(fmt)
     logger.addHandler(fh)
 
