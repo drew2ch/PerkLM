@@ -72,17 +72,8 @@ class DialogueEmbedding(nn.Module):
 
         input_ids = batch['input_ids']
         attention_mask = batch['attention_mask']
-
-        # batch-wise mask trimming
-        max_batch_length = attention_mask.sum(dim = 1).max().item()
-        if max_batch_length > self.maxt:
-            print(f'Warning: max_batch_length {max_batch_length} > maxt {self.maxt}')
-            input_ids = input_ids[:, :self.maxt]
-            attention_mask = attention_mask[:, :self.maxt]
-        else:
-            input_ids = input_ids[:, :max_batch_length]
-            attention_mask = attention_mask[:, :max_batch_length]
-        
+        assert input_ids.shape == attention_mask.shape, \
+            f'Error: input_ids {input_ids.shape} and attention_mask {attention_mask.shape} must have the same shape'
         embeddings = self.embedding(input_ids)
 
         return embeddings, attention_mask
