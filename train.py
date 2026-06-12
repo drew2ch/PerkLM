@@ -89,7 +89,8 @@ def train_epoch(model, dataloader,
         labels = tokens[:, 1:]
         attn_mask = attention_mask[:, :-1]
 
-        batch_input = {'input_ids': input_ids, 'attention_mask': attn_mask}
+        batch_input = {'input_ids': input_ids, 'attention_mask': attn_mask,
+                       'responder': batch_data['responder'].to(device)}
 
         with torch.autocast(device_type = 'cuda', dtype = torch.float16):
             logits = model(batch_input)
@@ -149,7 +150,8 @@ def eval_epoch(model, dataloader, device, tokenizer):
             labels = tokens[:, 1:]
             attn_mask = attention_mask[:, :-1]
 
-            batch_input = {'input_ids': input_ids, 'attention_mask': attn_mask}
+            batch_input = {'input_ids': input_ids, 'attention_mask': attn_mask,
+                            'responder': batch_data['responder'].to(device)}
 
             with torch.autocast(device_type = 'cuda', dtype = torch.float16):
                 logits = model(batch_input)
@@ -392,7 +394,7 @@ def main():
 
     # Test Stage (Experimental)
     logging.info('Training Complete. Evaluating Best Model on Test Set...')
-    checkpoint = torch.load(model_save_path / 'bestmodel.pt',
+    checkpoint = torch.load(model_save_path / 'best-model.pt',
                             map_location = device, weights_only = True)
     transformer.load_state_dict(checkpoint['model_state_dict'])
 
