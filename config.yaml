@@ -1,19 +1,18 @@
 system:
     seed: 893
     exp_dir: './experiments'
-    epochs: 50
+    epochs: 10
     batch_size: 32
     accum_steps: 4
     n_workers: 4
     patience: 10
-    resume: './experiments/checkpoints'
 
 optim:
-    lr: 0.0003
+    lr: 0.0001
     wd: 0.01
-    min_lr: 0.00003
-    warmup: 1000
-    total_steps: 50500
+    min_lr: 0.00001
+    warmup: 500
+    total_steps: 12625
     
 model:
     d_model: 256

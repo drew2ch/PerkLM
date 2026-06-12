@@ -15,6 +15,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from tqdm import tqdm
 from pathlib import Path
+from torch.utils.data import ConcatDataset
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from transformers import GPT2TokenizerFast
@@ -182,6 +183,7 @@ def main():
     # === Core I/O and System Mechanics ===
     parser.add_argument('-c', '--config', default = './config.yaml', help = 'YAML Config')
     parser.add_argument('-s', '--seed', type = int, default = None, help = 'Random Seed')
+    parser.add_argument('-d', '--deploy', action = 'store_true', help = 'Flag for Deployment Training (Full Data)')
     parser.add_argument('--tensorboard', action = 'store_true', help = 'Log TensorBoard Metrics')
     parser.add_argument('--exp-dir', type = str, default = None, help = 'Experiment Directory')
 
@@ -190,7 +192,6 @@ def main():
     parser.add_argument('--accum-steps', type = int, default = None, help = 'Gradient Accumulation Steps')
     parser.add_argument('--n-workers', type = int, default = None, help = 'DataLoader Workers')
     parser.add_argument('--patience', type = int, default = None, help = 'Early Stopping Patience')
-    parser.add_argument('--resume', type = str, default = None, help = 'Path to Checkpoint')
 
     # === Optimizer and Scheduler ===
     parser.add_argument('--lr', type = float, default = None, help = 'Learning Rate')
@@ -223,7 +224,6 @@ def main():
     if args.accum_steps is not None: config['system']['accum_steps'] = args.accum_steps
     if args.n_workers is not None:   config['system']['n_workers']   = args.n_workers
     if args.patience is not None:    config['system']['patience']    = args.patience
-    if args.resume is not None:      config['system']['resume']      = args.resume
 
     # Optimizer
     if args.lr is not None:          config['optim']['lr']          = args.lr
@@ -250,8 +250,12 @@ def main():
     result_path = exp_dir / 'result'
     model_save_path.mkdir(parents = True, exist_ok = True)
     result_path.mkdir(parents = True, exist_ok = True)
+
+    if args.deploy:
+        dep_dir = Path('deploy')
+        dep_dir.mkdir(parents = True, exist_ok = True)
     
-    log_file = exp_dir / 'train.log'
+    log_file = exp_dir / 'train.log' if not args.deploy else dep_dir / 'train.log'
     setup_logging(log_file)
     logging.info(f'Logging to {log_file}')
 
@@ -259,7 +263,7 @@ def main():
     logging.info(f'Initialized Cluster Environment. Using Device: {device}')
 
     tb_writer = SummaryWriter(log_dir = str(exp_dir / 'tensorboard')) \
-        if args.tensorboard else None
+        if args.tensorboard and not args.deploy else None
     
     # Import Tokenizer
     tokenizer = GPT2TokenizerFast.from_pretrained(config['model']['tokenizer'])
@@ -274,12 +278,19 @@ def main():
     g.manual_seed(final_seed)
 
     # Initialize Data Loaders
-    train_loader = DataLoader(train, batch_size = config['system']['batch_size'], shuffle = True, 
-                              num_workers = config['system']['n_workers'], 
-                              worker_init_fn = seed_worker, generator = g, pin_memory = True)
-    val_loader = DataLoader(val, batch_size = config['system']['batch_size'], shuffle = False, 
+    if args.deploy: # full deployment
+        train_loader = DataLoader(ConcatDataset([train, val, test]), batch_size = config['system']['batch_size'], 
+                            shuffle = True, num_workers = config['system']['n_workers'], 
+                            worker_init_fn = seed_worker, generator = g, pin_memory = True)
+        val_loader = None
+        test_loader = None
+    else: # experimental training
+        train_loader = DataLoader(train, batch_size = config['system']['batch_size'], shuffle = True, 
+                            num_workers = config['system']['n_workers'], 
+                            worker_init_fn = seed_worker, generator = g, pin_memory = True)
+        val_loader = DataLoader(val, batch_size = config['system']['batch_size'], shuffle = False, 
                             num_workers = config['system']['n_workers'], pin_memory = True)
-    test_loader = DataLoader(test, batch_size = config['system']['batch_size'], shuffle = False, 
+        test_loader = DataLoader(test, batch_size = config['system']['batch_size'], shuffle = False, 
                             num_workers = config['system']['n_workers'], pin_memory = True)
 
     transformer = FriendsTransformer(d_model = config['model']['d_model'],
@@ -303,12 +314,13 @@ def main():
                         schedulers = [warmup_scheduler, cosine_scheduler], milestones = [config['optim']['warmup']])
     scaler = torch.amp.GradScaler('cuda')
 
-    logging.info('Initiating Training...')
+    logging.info(f"Initiating Training{' (Deployment)' if args.deploy else ''}...")
 
-    # Track Val Loss
-    best_val_loss = float('inf')
-    patience = config['system']['patience']
-    epochs_no_improve = 0
+    if not args.deploy:
+        # Track Val Loss
+        best_val_loss = float('inf')
+        patience = config['system']['patience']
+        epochs_no_improve = 0
     
     # Epochs
     epochs = config['system']['epochs']
@@ -319,49 +331,66 @@ def main():
         # Train
         train_loss = train_epoch(transformer, train_loader, optimizer, scheduler, device,
                                  scaler, tokenizer, accum_steps = config['system']['accum_steps'])
-        # Validation
-        val_loss = eval_epoch(transformer, val_loader, device, tokenizer)
+        
+        # Validation and Tensorboard Tracking (Experimental)
+        if not args.deploy:
+            # Validation
+            val_loss = eval_epoch(transformer, val_loader, device, tokenizer)
 
-        # Tensorboard Tracking
-        if tb_writer:
-            tb_writer.add_scalar('Loss/Train', train_loss['total'], epoch)
-            tb_writer.add_scalar('Loss/Val', val_loss['total'], epoch)
-            tb_writer.add_scalar('Perplexity/Val', val_loss['perplexity'], epoch)
-            tb_writer.add_scalar('GradNorm/Train', train_loss['grad_norm'], epoch)
-            tb_writer.add_scalar('LR', scheduler.get_last_lr()[0], epoch)
+            # Tensorboard Tracking
+            if tb_writer:
+                tb_writer.add_scalar('Loss/Train', train_loss['total'], epoch)
+                tb_writer.add_scalar('Loss/Val', val_loss['total'], epoch)
+                tb_writer.add_scalar('Perplexity/Val', val_loss['perplexity'], epoch)
+                tb_writer.add_scalar('GradNorm/Train', train_loss['grad_norm'], epoch)
+                tb_writer.add_scalar('LR', scheduler.get_last_lr()[0], epoch)
 
-        # Update Val Loss
-        current_val_loss = val_loss['total']
-        if current_val_loss < best_val_loss:
-            best_val_loss = current_val_loss
-            status_tag = 'New Best -- Saved.'
+            # Update Val Loss
+            current_val_loss = val_loss['total']
+            if current_val_loss < best_val_loss:
+                best_val_loss = current_val_loss
+                status_tag = 'New Best -- Saved.'
 
-            torch.save({'epoch': epoch,
-                        'model_state_dict': transformer.state_dict(),
-                        'optimizer_state_dict': optimizer.state_dict(),
-                        'best_val_loss': best_val_loss,
-                        'config': config}, model_save_path / 'bestmodel.pt')
+                torch.save({'epoch': epoch,
+                            'model_state_dict': transformer.state_dict(),
+                            'optimizer_state_dict': optimizer.state_dict(),
+                            'best_val_loss': best_val_loss,
+                            'config': config}, model_save_path / 'best-model.pt')
+            else:
+                epochs_no_improve += 1
+                status_tag = f'No Improvement | Patience: {epochs_no_improve}/{patience}'
+            
+            # track time elapsed
+            elapsed = time.time() - epoch_start
+
+            # Telemetry
+            logging.info(f"Epoch {epoch:02d}/{epochs:02d} | "
+                        f"Train Loss: {train_loss['total']:.4f} | "
+                        f"Val Loss: {val_loss['total']:.4f} | "
+                        f"Val PPL: {val_loss['perplexity']:.4f} | "
+                        f"Time Elapsed: {elapsed:.2f}s | "
+                        f"{status_tag}")
+            
+            if epochs_no_improve >= patience:
+                logging.info(f'Early stopping triggered after {epoch} epochs.')
+                break
         else:
-            epochs_no_improve += 1
-            status_tag = f'No Improvement | Patience: {epochs_no_improve}/{patience}'
-
-        # track time elapsed
-        elapsed = time.time() - epoch_start
-        
-        # Telemetry
-        logging.info(f"Epoch {epoch:02d}/{epochs:02d} | "
-                    f"Train Loss: {train_loss['total']:.4f} | "
-                    f"Val Loss: {val_loss['total']:.4f} | "
-                    f"Val PPL: {val_loss['perplexity']:.4f} | "
-                    f"Time Elapsed: {elapsed:.2f}s | "
-                    f"{status_tag}")
-        
-        if epochs_no_improve >= patience:
-            logging.info(f'Early stopping triggered after {epoch} epochs.')
-            break
+            # track time elapsed
+            elapsed = time.time() - epoch_start
+            logging.info(f"Epoch {epoch:02d}/{epochs:02d} | "
+                 f"Train Loss: {train_loss['total']:.4f} | "
+                 f"Grad Norm: {train_loss['grad_norm']:.4f} | "
+                 f"Time Elapsed: {elapsed:.2f}s")
 
     if tb_writer: tb_writer.close()
+    if args.deploy:
+        # Save final model
+        torch.save({'epoch': epoch, 'model_state_dict': transformer.state_dict(),
+                    'config': config}, dep_dir / 'deploy-model.pt')
+        logging.info('Final model saved for deployment.')
+        return
 
+    # Test Stage (Experimental)
     logging.info('Training Complete. Evaluating Best Model on Test Set...')
     checkpoint = torch.load(model_save_path / 'bestmodel.pt',
                             map_location = device, weights_only = True)
