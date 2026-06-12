@@ -56,7 +56,7 @@ class DialogueEmbedding(nn.Module):
         Note: I implemented RoPE in lieu of sinusoidal position embeddings
         in the Attention Head.
     """
-    def __init__(self, tokenizer, d_model, maxt = 128):
+    def __init__(self, tokenizer, d_model, maxt: int = 512):
         
         super().__init__()
         self.tokenizer = tokenizer
@@ -66,7 +66,8 @@ class DialogueEmbedding(nn.Module):
                                       embedding_dim = self.d_model)
         
         # new: Responder Embedding
-        self.responder_embedding = nn.Embedding(len(FriendsDataset.SPEAKER_LOOKUP), self.d_model)
+        self.responder_embedding = nn.Embedding(num_embeddings = len(FriendsDataset.SPEAKER_LOOKUP), 
+                                                embedding_dim = self.d_model)
 
     def forward(self, batch):
         """ Params
@@ -88,7 +89,7 @@ class DialogueEmbedding(nn.Module):
 class DialogueMultiHeadAttention(nn.Module):
     """ Transformer Decoder Block w/ RoPE
     """
-    def __init__(self, d_model: int, n_heads: int, base: float = 10000.0, dropout: float = 0.2, maxt: int = 128):
+    def __init__(self, d_model: int, n_heads: int, base: float = 10000.0, dropout: float = 0.2, maxt: int = 512):
         
         super().__init__()
         assert d_model % n_heads == 0, \
@@ -143,7 +144,7 @@ class DialogueMultiHeadAttention(nn.Module):
 class DialogueDecoderLayer(nn.Module):
     """ Transformer Decoder Block for Dialogue Embeddings
     """
-    def __init__(self, d_model: int, n_heads: int, d_ff: int, dropout: float = 0.2, maxt: int = 128):
+    def __init__(self, d_model: int, n_heads: int, d_ff: int, dropout: float = 0.2, maxt: int = 512):
 
         super().__init__()
         self.d_model = d_model
@@ -177,7 +178,8 @@ class FriendsTransformer(nn.Module):
     """ Master Class encompassing the Embedding Layer plus
         a stack of DialogueDecoderLayers.
     """
-    def __init__(self, d_model: int, n_heads: int, n_layers: int, d_ff: int, dropout: float = 0.2, maxt = 128, tokenizer = None):
+    def __init__(self, d_model: int, n_heads: int, n_layers: int, d_ff: int, 
+                 dropout: float = 0.2, maxt: int = 512, tokenizer = None):
 
         super().__init__()
         self.d_model = d_model
@@ -207,3 +209,82 @@ class FriendsTransformer(nn.Module):
         logits = self.lm_head(self.final_norm(x))
 
         return logits
+    
+    @torch.no_grad()
+    def generate(self, prompt, responder: int, tokenizer = None, temperature: float = 1.0, device = None,
+                 min_length: int = 0, max_length: int = 256, random_state = None):
+        """ Generator function
+            Args:
+                prompt (str): The input text to generate a response for, pre-encoded.
+                responder (int): The ID of the responder to generate a response for (0-12).
+                tokenizer: The tokenizer to use for encoding the input.
+                temperature (float): The temperature for softmax sampling.
+                min_length (int): The minimum length of the generated output.
+                max_length (int): The maximum length of the generated output.
+                random_state (int): The random seed for reproducibility.
+        """
+
+        def get_speaker(responder: int):
+            """ Helper to retrieve speaker name from responder ID
+                FriendsDataset.SPEAKER_LOOKUP is a list of speaker names with 
+                unique mapping indices.
+            """
+            return next(speaker for speaker, index in FriendsDataset.SPEAKER_LOOKUP.items() \
+                        if index == responder)
+        
+        def penalize(logits: torch.Tensor, gen_ids: torch.Tensor, 
+                     penalty: float = 1.0) -> torch.Tensor:
+            """ Apply repetition penalty to logits of frequent tokens
+            """
+            counter = torch.bincount(gen_ids, minlength = logits.shape[-1]).float()
+            return logits - penalty * torch.log1p(counter)
+
+        # verify the responder ID exists
+        assert responder in range(len(FriendsDataset.SPEAKER_LOOKUP)), \
+            f'Error: Invalid responder ID {responder} not in range({len(FriendsDataset.SPEAKER_LOOKUP)})'
+
+        # Tokenizer/Device initialization, Fixed output seeding
+        if tokenizer is None: tokenizer = self.tokenizer
+        if device is None: device = next(self.parameters()).device
+        if random_state is not None: torch.manual_seed(random_state)
+        EOT_ID = tokenizer.convert_tokens_to_ids('<EOT>')
+        
+        # process input prompt
+        prompt += f"\n<RESPONSE>\n<SPEAKER={get_speaker(responder)}>"
+        encoded = tokenizer(prompt, add_special_tokens = False, return_tensors = 'pt')
+        prompt_ids = encoded['input_ids'].to(device)
+        responder_tensor = torch.tensor([responder], device = device)
+
+        # generate output
+        gen_ids = []
+        for _ in range(max_length):
+            
+            gen_tensor = torch.tensor(gen_ids, device = device)
+            current_ids = torch.cat([prompt_ids, gen_tensor.unsqueeze(0)], dim = -1)
+
+            batch = {'input_ids': current_ids,
+                           'attention_mask': torch.ones_like(current_ids, device = device),
+                           'responder': responder_tensor}
+            logits = self(batch)
+
+            # softmax over raw logits then sample next token
+            # temperature controls concentration of softmax probabilities
+            next_token_logits = logits[0, -1, :] / temperature
+            next_token_logits = penalize(next_token_logits, gen_tensor)
+
+            if len(gen_ids) < min_length: next_token_logits[EOT_ID] = float('-inf')
+            probs = torch.softmax(next_token_logits, dim = -1)
+            next_token = torch.multinomial(probs, num_samples = 1).item()
+            gen_ids.append(next_token)
+
+            # maximum length or <EOT> reached
+            if len(gen_ids) >= max_length: 
+                # gen_ids.append(EOT_ID)
+                break
+            if next_token == EOT_ID: break
+
+        # decode into text
+        gen_ids = torch.tensor(gen_ids, device = device)
+        gen_seq = tokenizer.decode(gen_ids, skip_special_tokens = True)
+
+        return gen_seq
