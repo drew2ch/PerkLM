@@ -259,7 +259,7 @@ class FriendsTransformer(nn.Module):
         gen_ids = []
         for _ in range(max_length):
             
-            gen_tensor = torch.tensor(gen_ids, device = device)
+            gen_tensor = torch.tensor(gen_ids, device = device, dtype = torch.long)
             current_ids = torch.cat([prompt_ids, gen_tensor.unsqueeze(0)], dim = -1)
 
             batch = {'input_ids': current_ids,
@@ -285,6 +285,6 @@ class FriendsTransformer(nn.Module):
 
         # decode into text
         gen_ids = torch.tensor(gen_ids, device = device)
-        gen_seq = tokenizer.decode(gen_ids, skip_special_tokens = True)
+        gen_seq = tokenizer.decode(gen_ids, skip_special_tokens = False)
 
         return gen_seq
