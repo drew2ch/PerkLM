@@ -351,6 +351,7 @@ def main():
             current_val_loss = val_loss['total']
             if current_val_loss < best_val_loss:
                 best_val_loss = current_val_loss
+                epochs_no_improve = 0
                 status_tag = 'New Best -- Saved.'
 
                 torch.save({'epoch': epoch,
