@@ -7,6 +7,7 @@ import math
 import torch
 import torch.nn.functional as F
 from torch import nn
+from dataset import FriendsDataset
 
 def precompute_rope_freqs(d_head: int, seq_len: int, base: float = 10000.0, device = None):
     """ Compute complex frequency tensor for RoPE
@@ -61,9 +62,11 @@ class DialogueEmbedding(nn.Module):
         self.tokenizer = tokenizer
         self.d_model = d_model
         self.maxt = maxt
-
         self.embedding = nn.Embedding(num_embeddings = len(self.tokenizer),
                                       embedding_dim = self.d_model)
+        
+        # new: Responder Embedding
+        self.responder_embedding = nn.Embedding(len(FriendsDataset.SPEAKER_LOOKUP), self.d_model)
 
     def forward(self, batch):
         """ Params
@@ -76,7 +79,11 @@ class DialogueEmbedding(nn.Module):
             f'Error: input_ids {input_ids.shape} and attention_mask {attention_mask.shape} must have the same shape'
         embeddings = self.embedding(input_ids)
 
-        return embeddings, attention_mask
+        # new: Responder Embedding
+        r = self.responder_embedding(batch['responder'])
+        x = embeddings + r.unsqueeze(1)
+
+        return x, attention_mask
     
 class DialogueMultiHeadAttention(nn.Module):
     """ Transformer Decoder Block w/ RoPE
@@ -122,8 +129,8 @@ class DialogueMultiHeadAttention(nn.Module):
         A = (Q_rope @ K_rope.transpose(-2, -1)) * self.scale
 
         # Masked Multi-Head Attention
-        X = A.size(-1)
-        mask = torch.triu(torch.ones(X, X,device = embedding.device), diagonal = 1).bool()
+        T_mask = A.size(-1)
+        mask = torch.triu(torch.ones(T_mask, T_mask, device = embedding.device), diagonal = 1).bool()
         A = A.masked_fill(mask, float('-inf')) + MASK
 
         A = F.softmax(A, dim = -1)
