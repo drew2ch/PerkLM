@@ -3,6 +3,7 @@
     Author: Andrew Chung
 """
 
+import re
 import math
 import torch
 import torch.nn.functional as F
@@ -212,7 +213,7 @@ class FriendsTransformer(nn.Module):
     
     @torch.no_grad()
     def generate(self, prompt, responder: int, tokenizer = None, temperature: float = 1.0, device = None,
-                 min_length: int = 0, max_length: int = 256, random_state = None):
+                 min_length: int = 0, max_length: int = 256, penalty: float = 1.0, random_state = None):
         """ Generator function
             Args:
                 prompt (str): The input text to generate a response for, pre-encoded.
@@ -222,6 +223,7 @@ class FriendsTransformer(nn.Module):
                 min_length (int): The minimum length of the generated output.
                 max_length (int): The maximum length of the generated output.
                 random_state (int): The random seed for reproducibility.
+                penalty (float): Repetition penalty strength. Default 1.0 (no penalty).
         """
 
         def get_speaker(responder: int):
@@ -233,11 +235,38 @@ class FriendsTransformer(nn.Module):
                         if i == responder), "OTHER")
         
         def penalize(logits: torch.Tensor, gen_ids: torch.Tensor, 
-                     penalty: float = 1.0) -> torch.Tensor:
+                     alpha: float = 1.0) -> torch.Tensor:
             """ Apply repetition penalty to logits of frequent tokens
             """
             counter = torch.bincount(gen_ids, minlength = logits.shape[-1]).float()
-            return logits - penalty * torch.log1p(counter)
+            return logits - alpha * torch.log1p(counter)
+        
+        def clean(text: str) -> str:
+            """ Post-process generated text
+                - Remove <EOT> token
+                - Replace multiple newlines with a single newline
+                - Enforce common grammatical/syntactical rules
+            """
+
+            # 1. trim consecutive spaces, eliminate <EOT>
+            text = re.sub(' +', ' ', text).replace('<EOT>', '').strip()
+            
+            # 2. Enforce capitalization at beginning and sentence boundaries
+            text = text[0].upper() + text[1:] if text else text
+            text = re.sub(r'(?<=[.!?])\s+([a-z])', 
+                  lambda m: m.group(0).upper(), text)
+            
+            # 3. Capitalize standalone 'i'
+            text = re.sub(r'\bi\b', 'I', text)
+
+            # 4. Space before and after punctuation/apostrophe, redundant punctuation repeats
+            text = re.sub(r'([,;:])\1+', r'\1', text)
+            text = re.sub(r'([.!?])\1{3,}', r'\1\1\1', text)
+            text = re.sub(r'\s+([.,!?;:])', r'\1', text)
+            text = re.sub(r'([.,!?;:])([^\s])', r'\1 \2', text)
+            text = re.sub(r"'\s+([a-z])", r"'\1", text)
+            
+            return text
 
         # verify the responder ID exists
         assert responder in range(len(FriendsDataset.SPEAKER_LOOKUP)), \
@@ -256,7 +285,7 @@ class FriendsTransformer(nn.Module):
         responder_tensor = torch.tensor([responder], device = device)
 
         # enumerate forbidden tokens (speaker tokens, context/response indicators)
-        BANNED_TOKENS = [i for i in tokenizer.all_special_ids if i != EOT_ID]
+        BANNED_TOKENS = [i for i in tokenizer.all_special_ids if i != EOT_ID] + [9860, 198] # 'yer', newline
 
         # generate output
         gen_ids = []
@@ -273,7 +302,7 @@ class FriendsTransformer(nn.Module):
             # softmax over raw logits then sample next token
             # temperature controls concentration of softmax probabilities
             next_token_logits = logits[0, -1, :] / temperature
-            next_token_logits = penalize(next_token_logits, gen_tensor)
+            next_token_logits = penalize(next_token_logits, gen_tensor, alpha = penalty)
             next_token_logits[BANNED_TOKENS] = float('-inf')
 
             if len(gen_ids) < min_length: next_token_logits[EOT_ID] = float('-inf')
@@ -287,9 +316,8 @@ class FriendsTransformer(nn.Module):
                 break
             if next_token == EOT_ID: break
 
-        # decode into text
+        # decode into text, post-processing
         gen_ids = torch.tensor(gen_ids, device = device)
-        gen_seq = tokenizer.decode(gen_ids, skip_special_tokens = False).replace('\n', ' ').strip()
-        gen_seq = gen_seq.replace('<EOT>', '\n<EOT>')
+        gen_seq = tokenizer.decode(gen_ids, skip_special_tokens = False)
 
-        return gen_seq
+        return clean(gen_seq)
