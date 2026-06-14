@@ -229,8 +229,8 @@ class FriendsTransformer(nn.Module):
                 FriendsDataset.SPEAKER_LOOKUP is a list of speaker names with 
                 unique mapping indices.
             """
-            return next(speaker for speaker, index in FriendsDataset.SPEAKER_LOOKUP.items() \
-                        if index == responder)
+            return next((s for s, i in FriendsDataset.SPEAKER_LOOKUP.items() \
+                        if i == responder), "OTHER")
         
         def penalize(logits: torch.Tensor, gen_ids: torch.Tensor, 
                      penalty: float = 1.0) -> torch.Tensor:
@@ -255,6 +255,9 @@ class FriendsTransformer(nn.Module):
         prompt_ids = encoded['input_ids'].to(device)
         responder_tensor = torch.tensor([responder], device = device)
 
+        # enumerate forbidden tokens (speaker tokens, context/response indicators)
+        BANNED_TOKENS = [i for i in tokenizer.all_special_ids if i != EOT_ID]
+
         # generate output
         gen_ids = []
         for _ in range(max_length):
@@ -271,6 +274,7 @@ class FriendsTransformer(nn.Module):
             # temperature controls concentration of softmax probabilities
             next_token_logits = logits[0, -1, :] / temperature
             next_token_logits = penalize(next_token_logits, gen_tensor)
+            next_token_logits[BANNED_TOKENS] = float('-inf')
 
             if len(gen_ids) < min_length: next_token_logits[EOT_ID] = float('-inf')
             probs = torch.softmax(next_token_logits, dim = -1)
