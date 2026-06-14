@@ -249,7 +249,7 @@ class FriendsTransformer(nn.Module):
             """
 
             # 1. trim consecutive spaces, eliminate <EOT>
-            text = re.sub(' +', ' ', text).replace('<EOT>', '').strip()
+            text = re.sub(' +', ' ', text.replace('\n', ' ')).replace('<EOT>', '').strip()
             
             # 2. Enforce capitalization at beginning and sentence boundaries
             text = text[0].upper() + text[1:] if text else text
@@ -285,7 +285,7 @@ class FriendsTransformer(nn.Module):
         responder_tensor = torch.tensor([responder], device = device)
 
         # enumerate forbidden tokens (speaker tokens, context/response indicators)
-        BANNED_TOKENS = [i for i in tokenizer.all_special_ids if i != EOT_ID] + [9860, 198] # 'yer', newline
+        BANNED_TOKENS = [i for i in tokenizer.all_special_ids if i != EOT_ID] + [9860] # 'yer'
 
         # generate output
         gen_ids = []
