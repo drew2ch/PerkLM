@@ -9,6 +9,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from dataset import FriendsDataset
+from transformers import GPT2TokenizerFast
 
 def precompute_rope_freqs(d_head: int, seq_len: int, base: float = 10000.0, device = None):
     """ Compute complex frequency tensor for RoPE
@@ -210,6 +211,24 @@ class FriendsTransformer(nn.Module):
         logits = self.lm_head(self.final_norm(x))
 
         return logits
+    
+    @classmethod
+    def load(cls, path: str, device = None):
+        """ Load from pre-trained model checkpoint
+            Args:
+                path (str): Path to the checkpoint file.
+                device: The device to load the model onto. If None, uses the current device.
+            Returns:
+                An instance of FriendsTransformer with loaded weights.
+        """
+        device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        checkpoint = torch.load(path, map_location = device, weights_only = True)
+        config = checkpoint['config']
+        tokenizer = GPT2TokenizerFast.from_pretrained(config['model']['tokenizer'])
+        model = cls(**config['model'], tokenizer = tokenizer).to(device)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        model.eval()
+        return model
     
     @torch.no_grad()
     def generate(self, prompt, responder: int, tokenizer = None, temperature: float = 1.0, device = None,
