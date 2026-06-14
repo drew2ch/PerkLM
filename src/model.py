@@ -289,6 +289,7 @@ class FriendsTransformer(nn.Module):
 
         # decode into text
         gen_ids = torch.tensor(gen_ids, device = device)
-        gen_seq = tokenizer.decode(gen_ids, skip_special_tokens = False)
+        gen_seq = tokenizer.decode(gen_ids, skip_special_tokens = False).replace('\n', ' ').strip()
+        gen_seq = gen_seq.replace('<EOT>', '\n<EOT>')
 
         return gen_seq
