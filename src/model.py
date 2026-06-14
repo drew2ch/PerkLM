@@ -224,7 +224,8 @@ class FriendsTransformer(nn.Module):
         device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         checkpoint = torch.load(path, map_location = device, weights_only = True)
         config = checkpoint['config']
-        tokenizer = GPT2TokenizerFast.from_pretrained(config['model']['tokenizer'])
+        tokenizer_path = config['model'].pop('tokenizer')
+        tokenizer = GPT2TokenizerFast.from_pretrained(tokenizer_path)
         model = cls(**config['model'], tokenizer = tokenizer).to(device)
         model.load_state_dict(checkpoint['model_state_dict'])
         model.eval()
@@ -305,6 +306,11 @@ class FriendsTransformer(nn.Module):
 
         # enumerate forbidden tokens (speaker tokens, context/response indicators)
         BANNED_TOKENS = [i for i in tokenizer.all_special_ids if i != EOT_ID] + [9860] # 'yer'
+        tag_tokens = set()
+        for s in FriendsDataset.SPEAKER_LOOKUP.keys():
+            ids = tokenizer.convert_tokens_to_ids(f'<SPEAKER={s}>')
+            tag_tokens.update(ids)
+        BANNED_TOKENS.extend(tag_tokens)
 
         # generate output
         gen_ids = []
