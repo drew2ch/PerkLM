@@ -306,11 +306,6 @@ class FriendsTransformer(nn.Module):
 
         # enumerate forbidden tokens (speaker tokens, context/response indicators)
         BANNED_TOKENS = [i for i in tokenizer.all_special_ids if i != EOT_ID] + [9860] # 'yer'
-        tag_tokens = set()
-        for s in FriendsDataset.SPEAKER_LOOKUP.keys():
-            ids = tokenizer.convert_tokens_to_ids(f'<SPEAKER={s}>')
-            tag_tokens.update(ids)
-        BANNED_TOKENS.extend(tag_tokens)
 
         # generate output
         gen_ids = []
