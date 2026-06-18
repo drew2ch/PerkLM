@@ -1,9 +1,9 @@
 system:
     seed: 893
     exp_dir: './experiments'
-    epochs: 10
-    batch_size: 32
-    accum_steps: 4
+    epochs: 12
+    batch_size: 4
+    accum_steps: 32
     n_workers: 4
     patience: 10
 
@@ -15,10 +15,10 @@ optim:
     total_steps: 12625
     
 model:
-    d_model: 256
-    n_heads: 4
-    n_layers: 4
-    d_ff: 1024
+    d_model: 512
+    n_heads: 8
+    n_layers: 6
+    d_ff: 2048
     dropout: 0.1
-    maxt: 256
+    maxt: 512
     tokenizer: './tokenizer'
