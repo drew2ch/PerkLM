@@ -65,8 +65,14 @@ context = ("<CONTEXT>\n"
 # For option A, call model.transformer.generate()
 # For option B, call model.generate()
 
+# You can refer to the responder ID table above or 
+# alternatively query the built-in responder ID map.
+
+responder = 2 # Chandler
+responder = FriendsDataset.SPEAKER_LOOKUP["CHANDLER"] # All Caps, will return 2
+
 response = model.generate(prompt = context,
-                        responder = 2, # Chandler
+                        responder = responder,
                         temperature = 0.85,
                         penalty = 1.2,
                         min_length = 10,
