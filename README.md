@@ -72,6 +72,9 @@ response = model.generate(prompt = context,
                         min_length = 10,
                         max_length = 128,
                         random_state = 893)
+
+response
+# ex: Could this BE any more of a third-wheel situation?
 ```
 
 |Parameter|Type|Default|Description|
