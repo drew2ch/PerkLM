@@ -46,13 +46,13 @@ Now here's the fun part: **line generation**. As with model loading, the built-i
 
 | ID | Character | ID | Character |
 |:--|:--|:--|:--|
-| 0 | Ross     | 7  | Janice |
-| 1 | Monica   | 8  | Richard |
-| 2 | Chandler | 9  | Carol |
-| 3 | Joey     | 10 | Susan |
-| 4 | Rachel   | 11 | Mike |
-| 5 | Phoebe   | 12 | Other |
-| 6 | Gunther  |    |       |
+| 0 | Ross     | 6 | Gunther |
+| 1 | Monica   | 7  | Janice |
+| 2 | Chandler | 8  | Richard |
+| 3 | Joey     | 9  | Carol |
+| 4 | Rachel   | 10 | Susan |
+| 5 | Phoebe   | 11 | Mike |
+| | | 12 | Other |
 
 Below is example code to format your context window and prompt PerkLM accordingly, along with the parameter catalogue:
 
@@ -202,7 +202,9 @@ Despite limitations on data quantity and model scale, all model internals -- att
 │   ├── tokenizer_config.json
 │   └── vocab.json
 ├── train.py              # Training loop, optimizer, scheduler, early stopping
-└── config.yaml           # Hyperparameter configuration
+├── config.yaml           # Hyperparameter configuration
+├── requirements.txt
+└── .gitignore
 ```
 
 **Author**: **Andrew (Ho-Young) Chung** · Cornell BS/MPS Statistics, Information Science
