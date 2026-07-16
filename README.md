@@ -1,6 +1,6 @@
-# PerkLM -- Friends Dialogue Micro-Language Model
+# PerkLM -- The One With A.I.
 
-**PerkLM** is a **bespoke, decoder-only autoregressive transformer** that I constructed from first principles. My language model, trained on dialogue lines from all 10 seasons of the ageless American sitcom **Friends** (1994-2004), generates a character-conditioned line of dialogue in response to user-provided dialogue.
+**PerkLM**: Friends Dialogue Micro-Language Model is a **bespoke, decoder-only autoregressive transformer** that I constructed from first principles. My language model, trained on dialogue lines from all 10 seasons of the ageless American sitcom **Friends** (1994-2004), generates a character-conditioned line of dialogue in response to user-provided dialogue.
 
 **Motivation**: For a generative language modeling task, I could have just as easily fine-tuned an open source LLM from Hugging Face, but my desire was to learn the ins-and-outs of engineering the transformer architecture that underlies essentially all modern communicative AI models and deepen my mathematical intuition of the self-attention mechanism that underlies them. To that end, I constructed the entire decoder-only Transformer stack from scratch -- no pre-packaged `nn.Module` objects, pre-trained weights, nor copy-and-pasted tutorial code, just PyTorch primitives. The fascinating truth that I learned -- under the bonnet of the most powerful language models as of this writing is math almost deceptively simple, encompassing matrix inner products, softmax normalization, affine transformations, and causal masking.
 
